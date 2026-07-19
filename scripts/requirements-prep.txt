@@ -1,0 +1,6 @@
+# Manual prep only (not used by the nightly workflow).
+# Run: python scripts/prep_avatar.py  -> regenerates assets/avatar-cutout.png
+rembg>=2,<3
+onnxruntime>=1.16
+Pillow>=10,<13
+requests>=2.32,<3

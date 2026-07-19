@@ -1,57 +1,85 @@
+"""Render the background-removed avatar (assets/avatar-cutout.png, produced by
+scripts/prep_avatar.py) as an animated ASCII portrait with a transparent
+background and no terminal panel, so it floats on the GitHub page.
+
+This reads a committed, pre-isolated source image and does no network I/O, so it
+is safe to run in the nightly workflow. To refresh the source after changing the
+GitHub profile picture, run scripts/prep_avatar.py first (needs rembg)."""
 from __future__ import annotations
 
+from html import escape
 from pathlib import Path
+
+from PIL import Image, ImageOps
 
 
 ROOT = Path(__file__).resolve().parents[1]
+SOURCE = ROOT / "assets" / "avatar-cutout.png"
 OUTPUT = ROOT / "identity-ascii.svg"
-WIDTH, HEIGHT = 350, 300
+# 70-level density ramp (dense -> sparse). The removed background is composited to
+# white, which lands on the trailing space, so the backdrop renders as nothing.
+RAMP = "$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/\\|()1{}[]?-_+~<>i!lI;:,\"^`'. "
+COLS = 110                # horizontal resolution (detail)
+WIDTH, HEIGHT = 350, 300  # viewBox; 350 + info-card 510 = heatmap 860 (aligned)
+CHAR_RATIO = 0.6          # monospace glyph advance width / font-size
+LINE_RATIO = 0.92         # line height / font-size
+PAD = 8                   # padding inside the viewBox
+FILL = "#8e3fd6"          # deep enough to read on both GitHub light and dark themes
 
 
 def main() -> None:
+    image = Image.open(SOURCE).convert("RGB")
+    width, height = image.size
+    # Derive ROWS from the source aspect so the portrait is not vertically
+    # stretched once the tall-ish character cells are accounted for.
+    rows = max(1, round(COLS * (height / width) * (CHAR_RATIO / LINE_RATIO)))
+
+    small = image.resize((COLS, rows), Image.Resampling.LANCZOS)
+    # Normalize the tonal range and lift shadows (gamma < 1) so a dark suit shows
+    # texture across the ramp instead of crushing to a solid block of dense chars.
+    gray = ImageOps.autocontrast(ImageOps.grayscale(small), cutoff=1)
+    gray = gray.point(lambda value: int(255 * (value / 255) ** 0.55))
+    lines = []
+    for y in range(rows):
+        line = "".join(
+            RAMP[min(len(RAMP) - 1, gray.getpixel((x, y)) * len(RAMP) // 256)]
+            for x in range(COLS)
+        )
+        lines.append(line.rstrip())
+
+    box_w = WIDTH - 2 * PAD
+    box_h = HEIGHT - 2 * PAD
+    font_size = min(box_w / (COLS * CHAR_RATIO), box_h / (rows * LINE_RATIO))
+    line_height = font_size * LINE_RATIO
+    grid_w = COLS * CHAR_RATIO * font_size
+    grid_h = rows * line_height
+    start_x = (WIDTH - grid_w) / 2
+    start_y = (HEIGHT - grid_h) / 2 + font_size
+
+    clips, text_rows = [], []
+    for index, line in enumerate(lines):
+        y = start_y + index * line_height
+        begin = 0.2 + index * 0.02
+        clips.append(
+            f'<clipPath id="line-{index}">'
+            f'<rect x="{start_x:.2f}" y="{y - font_size:.2f}" height="{font_size + 2:.2f}" width="0">'
+            f'<animate attributeName="width" from="0" to="{grid_w:.2f}" dur="0.45s" begin="{begin:.3f}s" fill="freeze" />'
+            f'</rect></clipPath>'
+        )
+        text_rows.append(
+            f'<text x="{start_x:.2f}" y="{y:.2f}" clip-path="url(#line-{index})">{escape(line)}</text>'
+        )
+
     svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="{WIDTH}" height="{HEIGHT}" viewBox="0 0 {WIDTH} {HEIGHT}" role="img" aria-labelledby="title desc">
-<title id="title">Animated YFA identity mark</title>
-<desc id="desc">A crisp geometric YFA mark assembles inside a terminal window.</desc>
-<defs>
-  <linearGradient id="violet" x1="0" y1="0" x2="1" y2="1">
-    <stop offset="0" stop-color="#d39be8"/>
-    <stop offset="1" stop-color="#a85cc7"/>
-  </linearGradient>
-  <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
-    <feGaussianBlur stdDeviation="5" result="blur"/>
-    <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-  </filter>
-  <pattern id="grid" width="18" height="18" patternUnits="userSpaceOnUse">
-    <circle cx="1" cy="1" r="1" fill="#6d4c7d" opacity=".2"/>
-  </pattern>
-</defs>
-<style>
-  text {{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }}
-  .piece {{ opacity:0; transform-box:fill-box; transform-origin:center; animation:assemble .52s cubic-bezier(.2,.9,.2,1.15) forwards; }}
-  .top {{ animation-delay:.2s }} .stem {{ animation-delay:.42s }} .cross {{ animation-delay:.64s }}
-  .left {{ animation-delay:.82s }} .center {{ animation-delay:.94s }} .right {{ animation-delay:1.06s }}
-  .scan {{ animation:scan 2.8s ease-in-out 1.2s infinite; }}
-  @keyframes assemble {{ from {{ opacity:0; transform:scale(.68) translateY(7px); }} to {{ opacity:1; transform:scale(1) translateY(0); }} }}
-  @keyframes scan {{ 0%,100% {{ opacity:0; transform:translateY(0); }} 15% {{ opacity:.48; }} 70% {{ opacity:.18; }} 90% {{ opacity:0; transform:translateY(202px); }} }}
-  @media (prefers-reduced-motion:reduce) {{ .piece {{ opacity:1; animation:none; }} .scan {{ display:none; }} }}
-</style>
-<rect width="348" height="298" x="1" y="1" rx="16" fill="#100b16" stroke="#3d2a49"/>
-<rect x="12" y="38" width="326" height="248" rx="11" fill="url(#grid)"/>
-<circle cx="20" cy="20" r="4.5" fill="#ff6b81"/><circle cx="36" cy="20" r="4.5" fill="#f6c85f"/><circle cx="52" cy="20" r="4.5" fill="#65d6a6"/>
-<text x="67" y="24" font-size="10" fill="#a993b8">identity.svg</text>
-<g filter="url(#glow)">
-  <rect class="piece top" x="81" y="54" width="188" height="38" rx="3" fill="url(#violet)"/>
-  <rect class="piece stem" x="145" y="119" width="60" height="66" rx="3" fill="url(#violet)"/>
-  <rect class="piece cross" x="81" y="184" width="188" height="48" rx="3" fill="url(#violet)"/>
-  <rect class="piece left" x="29" y="231" width="52" height="49" rx="3" fill="url(#violet)"/>
-  <rect class="piece center" x="145" y="231" width="60" height="49" rx="3" fill="url(#violet)"/>
-  <rect class="piece right" x="269" y="231" width="52" height="49" rx="3" fill="url(#violet)"/>
-</g>
-<rect class="scan" x="29" y="51" width="292" height="2" rx="1" fill="#f4dfff" opacity="0"/>
+<title id="title">yfainvestments-hub rendered as animated ASCII art</title>
+<desc id="desc">A portrait types itself in row by row over a transparent background.</desc>
+<defs>{''.join(clips)}</defs>
+<style>text {{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: {font_size:.2f}px; font-weight: 700; fill: {FILL}; white-space: pre; }}</style>
+{''.join(text_rows)}
 </svg>
 '''
     OUTPUT.write_text(svg, encoding="utf-8")
-    print(f"Wrote {OUTPUT}")
+    print(f"Wrote {OUTPUT} ({COLS}x{rows} chars, font {font_size:.2f}px)")
 
 
 if __name__ == "__main__":
