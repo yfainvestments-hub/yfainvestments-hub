@@ -12,8 +12,9 @@ USERNAME = "yfainvestments-hub"
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "assets" / "avatar.png"
 OUTPUT = ROOT / "identity-ascii.svg"
-RAMP = "@%#*+=-:. "
-COLS, ROWS = 50, 34
+# 70-level density ramp (dense -> sparse) for smooth tonal gradation.
+RAMP = "$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/\\|()1{}[]?-_+~<>i!lI;:,\"^`'. "
+COLS, ROWS = 104, 52  # ~2:1 grid so the character art fills the wide panel
 WIDTH, HEIGHT = 350, 300
 
 
@@ -46,8 +47,12 @@ def refresh_avatar() -> None:
 def main() -> None:
     refresh_avatar()
     image = Image.open(SOURCE).convert("RGB")
-    image = ImageOps.fit(image, (COLS, ROWS), method=Image.Resampling.LANCZOS)
-    gray = ImageEnhance.Contrast(ImageOps.grayscale(image)).enhance(1.7)
+    # Crop to the grid's wide aspect, biased upward so the face/head is kept
+    # rather than centered on the torso.
+    image = ImageOps.fit(
+        image, (COLS, ROWS), method=Image.Resampling.LANCZOS, centering=(0.5, 0.38)
+    )
+    gray = ImageEnhance.Contrast(ImageOps.grayscale(image)).enhance(1.8)
     lines = []
     for y in range(ROWS):
         chars = []
@@ -60,8 +65,8 @@ def main() -> None:
     # square portrait fills the card evenly instead of hugging the left edge.
     CHAR_RATIO = 0.6        # monospace glyph advance width / font-size
     LINE_RATIO = 0.92       # line height / font-size (dense rows, minimal leading)
-    PAD_X = 16              # side padding inside the panel
-    TOP, BOTTOM = 38, 272   # vertical band for the art (below title, above cursor)
+    PAD_X = 10              # side padding inside the panel
+    TOP, BOTTOM = 36, 284   # vertical band for the art (below title, fills the panel)
 
     box_w = WIDTH - 2 * PAD_X
     box_h = BOTTOM - TOP
