@@ -56,30 +56,49 @@ def main() -> None:
             chars.append(RAMP[min(len(RAMP) - 1, value * len(RAMP) // 256)])
         lines.append("".join(chars).rstrip())
 
+    # Fit the COLS x ROWS character grid into the panel and center it, so a
+    # square portrait fills the card evenly instead of hugging the left edge.
+    CHAR_RATIO = 0.6        # monospace glyph advance width / font-size
+    LINE_RATIO = 0.92       # line height / font-size (dense rows, minimal leading)
+    PAD_X = 16              # side padding inside the panel
+    TOP, BOTTOM = 38, 272   # vertical band for the art (below title, above cursor)
+
+    box_w = WIDTH - 2 * PAD_X
+    box_h = BOTTOM - TOP
+    font_size = min(box_w / (COLS * CHAR_RATIO), box_h / (ROWS * LINE_RATIO))
+    line_height = font_size * LINE_RATIO
+    grid_w = COLS * CHAR_RATIO * font_size
+    start_x = PAD_X + (box_w - grid_w) / 2
+    start_y = TOP + font_size
+
     clips, rows = [], []
-    start_y, line_height = 48, 6.35
     for index, line in enumerate(lines):
         y = start_y + index * line_height
         begin = 0.2 + index * 0.035
         clips.append(
-            f'<clipPath id="line-{index}"><rect x="18" y="{y - 6:.2f}" height="8" width="0">'
-            f'<animate attributeName="width" from="0" to="314" dur="0.42s" begin="{begin:.3f}s" fill="freeze" />'
+            f'<clipPath id="line-{index}">'
+            f'<rect x="{start_x:.2f}" y="{y - font_size:.2f}" height="{font_size + 3:.2f}" width="0">'
+            f'<animate attributeName="width" from="0" to="{grid_w:.2f}" dur="0.42s" begin="{begin:.3f}s" fill="freeze" />'
             f'</rect></clipPath>'
         )
         rows.append(
-            f'<text x="18" y="{y:.2f}" clip-path="url(#line-{index})">{escape(line)}</text>'
+            f'<text x="{start_x:.2f}" y="{y:.2f}" clip-path="url(#line-{index})">{escape(line)}</text>'
         )
+
+    cursor_x = start_x
+    cursor_y = start_y + ROWS * line_height + 1
+    cursor_w = CHAR_RATIO * font_size
 
     svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="{WIDTH}" height="{HEIGHT}" viewBox="0 0 {WIDTH} {HEIGHT}" role="img" aria-labelledby="title desc">
 <title id="title">YFA identity mark rendered as animated ASCII art</title>
 <desc id="desc">The YFA logo types itself row by row inside a terminal panel.</desc>
 <defs>{''.join(clips)}</defs>
-<style>text {{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 7px; font-weight: 700; fill: #bd83d6; white-space: pre; }}</style>
+<style>text {{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: {font_size:.2f}px; font-weight: 700; fill: #bd83d6; white-space: pre; }}</style>
 <rect width="348" height="298" x="1" y="1" rx="16" fill="#100b16" stroke="#3d2a49" />
 <circle cx="20" cy="20" r="4.5" fill="#ff6b81"/><circle cx="36" cy="20" r="4.5" fill="#f6c85f"/><circle cx="52" cy="20" r="4.5" fill="#65d6a6"/>
 <text x="67" y="24" style="font-size:10px;fill:#a993b8">identity.svg</text>
 {''.join(rows)}
-<rect x="18" y="275" width="8" height="12" fill="#bd83d6"><animate attributeName="opacity" values="1;0;1" dur="1s" repeatCount="indefinite" /></rect>
+<rect x="{cursor_x:.2f}" y="{cursor_y:.2f}" width="{cursor_w:.2f}" height="{font_size + 3:.2f}" fill="#bd83d6"><animate attributeName="opacity" values="1;0;1" dur="1s" repeatCount="indefinite" /></rect>
 </svg>
 '''
     OUTPUT.write_text(svg, encoding="utf-8")
