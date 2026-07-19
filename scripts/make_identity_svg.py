@@ -1,109 +1,53 @@
 from __future__ import annotations
 
-import os
-from html import escape
 from pathlib import Path
 
-import requests
-from PIL import Image, ImageEnhance, ImageOps
 
-
-USERNAME = "yfainvestments-hub"
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / "assets" / "avatar.png"
 OUTPUT = ROOT / "identity-ascii.svg"
-# 70-level density ramp (dense -> sparse) for smooth tonal gradation.
-RAMP = "$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/\\|()1{}[]?-_+~<>i!lI;:,\"^`'. "
-COLS, ROWS = 104, 52  # ~2:1 grid so the character art fills the wide panel
 WIDTH, HEIGHT = 350, 300
 
 
-def refresh_avatar() -> None:
-    """Pull the account's current GitHub avatar so the ASCII art tracks the live
-    profile picture. Falls back to the committed assets/avatar.png on any failure
-    (offline, rate limit, API change) so the build never breaks."""
-    headers = {"User-Agent": f"{USERNAME}-profile/1.0"}
-    token = os.environ.get("GITHUB_TOKEN")
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
-    try:
-        api = requests.get(
-            f"https://api.github.com/users/{USERNAME}",
-            headers={**headers, "Accept": "application/vnd.github+json"},
-            timeout=30,
-        )
-        api.raise_for_status()
-        avatar_url = api.json()["avatar_url"]
-        sep = "&" if "?" in avatar_url else "?"
-        image = requests.get(f"{avatar_url}{sep}s=512", headers=headers, timeout=30)
-        image.raise_for_status()
-        SOURCE.parent.mkdir(parents=True, exist_ok=True)
-        SOURCE.write_bytes(image.content)
-        print(f"Refreshed avatar from {avatar_url}")
-    except Exception as exc:  # noqa: BLE001 - deliberately fall back to committed image
-        print(f"Could not refresh avatar ({exc}); using existing {SOURCE}")
-
-
 def main() -> None:
-    refresh_avatar()
-    image = Image.open(SOURCE).convert("RGB")
-    # Crop to the grid's wide aspect, biased upward so the face/head is kept
-    # rather than centered on the torso.
-    image = ImageOps.fit(
-        image, (COLS, ROWS), method=Image.Resampling.LANCZOS, centering=(0.5, 0.38)
-    )
-    gray = ImageEnhance.Contrast(ImageOps.grayscale(image)).enhance(1.8)
-    lines = []
-    for y in range(ROWS):
-        chars = []
-        for x in range(COLS):
-            value = gray.getpixel((x, y))
-            chars.append(RAMP[min(len(RAMP) - 1, value * len(RAMP) // 256)])
-        lines.append("".join(chars).rstrip())
-
-    # Fit the COLS x ROWS character grid into the panel and center it, so a
-    # square portrait fills the card evenly instead of hugging the left edge.
-    CHAR_RATIO = 0.6        # monospace glyph advance width / font-size
-    LINE_RATIO = 0.92       # line height / font-size (dense rows, minimal leading)
-    PAD_X = 10              # side padding inside the panel
-    TOP, BOTTOM = 36, 284   # vertical band for the art (below title, fills the panel)
-
-    box_w = WIDTH - 2 * PAD_X
-    box_h = BOTTOM - TOP
-    font_size = min(box_w / (COLS * CHAR_RATIO), box_h / (ROWS * LINE_RATIO))
-    line_height = font_size * LINE_RATIO
-    grid_w = COLS * CHAR_RATIO * font_size
-    start_x = PAD_X + (box_w - grid_w) / 2
-    start_y = TOP + font_size
-
-    clips, rows = [], []
-    for index, line in enumerate(lines):
-        y = start_y + index * line_height
-        begin = 0.2 + index * 0.035
-        clips.append(
-            f'<clipPath id="line-{index}">'
-            f'<rect x="{start_x:.2f}" y="{y - font_size:.2f}" height="{font_size + 3:.2f}" width="0">'
-            f'<animate attributeName="width" from="0" to="{grid_w:.2f}" dur="0.42s" begin="{begin:.3f}s" fill="freeze" />'
-            f'</rect></clipPath>'
-        )
-        rows.append(
-            f'<text x="{start_x:.2f}" y="{y:.2f}" clip-path="url(#line-{index})">{escape(line)}</text>'
-        )
-
-    cursor_x = start_x
-    cursor_y = start_y + ROWS * line_height + 1
-    cursor_w = CHAR_RATIO * font_size
-
     svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="{WIDTH}" height="{HEIGHT}" viewBox="0 0 {WIDTH} {HEIGHT}" role="img" aria-labelledby="title desc">
-<title id="title">YFA identity mark rendered as animated ASCII art</title>
-<desc id="desc">The YFA logo types itself row by row inside a terminal panel.</desc>
-<defs>{''.join(clips)}</defs>
-<style>text {{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: {font_size:.2f}px; font-weight: 700; fill: #bd83d6; white-space: pre; }}</style>
-<rect width="348" height="298" x="1" y="1" rx="16" fill="#100b16" stroke="#3d2a49" />
+<title id="title">Animated YFA identity mark</title>
+<desc id="desc">A crisp geometric YFA mark assembles inside a terminal window.</desc>
+<defs>
+  <linearGradient id="violet" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#d39be8"/>
+    <stop offset="1" stop-color="#a85cc7"/>
+  </linearGradient>
+  <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+    <feGaussianBlur stdDeviation="5" result="blur"/>
+    <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+  <pattern id="grid" width="18" height="18" patternUnits="userSpaceOnUse">
+    <circle cx="1" cy="1" r="1" fill="#6d4c7d" opacity=".2"/>
+  </pattern>
+</defs>
+<style>
+  text {{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }}
+  .piece {{ opacity:0; transform-box:fill-box; transform-origin:center; animation:assemble .52s cubic-bezier(.2,.9,.2,1.15) forwards; }}
+  .top {{ animation-delay:.2s }} .stem {{ animation-delay:.42s }} .cross {{ animation-delay:.64s }}
+  .left {{ animation-delay:.82s }} .center {{ animation-delay:.94s }} .right {{ animation-delay:1.06s }}
+  .scan {{ animation:scan 2.8s ease-in-out 1.2s infinite; }}
+  @keyframes assemble {{ from {{ opacity:0; transform:scale(.68) translateY(7px); }} to {{ opacity:1; transform:scale(1) translateY(0); }} }}
+  @keyframes scan {{ 0%,100% {{ opacity:0; transform:translateY(0); }} 15% {{ opacity:.48; }} 70% {{ opacity:.18; }} 90% {{ opacity:0; transform:translateY(202px); }} }}
+  @media (prefers-reduced-motion:reduce) {{ .piece {{ opacity:1; animation:none; }} .scan {{ display:none; }} }}
+</style>
+<rect width="348" height="298" x="1" y="1" rx="16" fill="#100b16" stroke="#3d2a49"/>
+<rect x="12" y="38" width="326" height="248" rx="11" fill="url(#grid)"/>
 <circle cx="20" cy="20" r="4.5" fill="#ff6b81"/><circle cx="36" cy="20" r="4.5" fill="#f6c85f"/><circle cx="52" cy="20" r="4.5" fill="#65d6a6"/>
-<text x="67" y="24" style="font-size:10px;fill:#a993b8">identity.svg</text>
-{''.join(rows)}
-<rect x="{cursor_x:.2f}" y="{cursor_y:.2f}" width="{cursor_w:.2f}" height="{font_size + 3:.2f}" fill="#bd83d6"><animate attributeName="opacity" values="1;0;1" dur="1s" repeatCount="indefinite" /></rect>
+<text x="67" y="24" font-size="10" fill="#a993b8">identity.svg</text>
+<g filter="url(#glow)">
+  <rect class="piece top" x="81" y="54" width="188" height="38" rx="3" fill="url(#violet)"/>
+  <rect class="piece stem" x="145" y="119" width="60" height="66" rx="3" fill="url(#violet)"/>
+  <rect class="piece cross" x="81" y="184" width="188" height="48" rx="3" fill="url(#violet)"/>
+  <rect class="piece left" x="29" y="231" width="52" height="49" rx="3" fill="url(#violet)"/>
+  <rect class="piece center" x="145" y="231" width="60" height="49" rx="3" fill="url(#violet)"/>
+  <rect class="piece right" x="269" y="231" width="52" height="49" rx="3" fill="url(#violet)"/>
+</g>
+<rect class="scan" x="29" y="51" width="292" height="2" rx="1" fill="#f4dfff" opacity="0"/>
 </svg>
 '''
     OUTPUT.write_text(svg, encoding="utf-8")
@@ -112,4 +56,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

@@ -10,7 +10,7 @@
 
 <table>
   <tr>
-    <td valign="top"><img src="./identity-ascii.svg" width="350" alt="Animated ASCII rendering of the YFA identity mark" /></td>
+    <td valign="top"><img src="./identity-ascii.svg" width="350" alt="Animated geometric YFA identity mark" /></td>
     <td valign="top"><img src="./info-card.svg" width="510" alt="Terminal-style profile card for YFA Investments" /></td>
   </tr>
 </table>
