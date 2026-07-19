@@ -8,11 +8,11 @@ ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "info-card.svg"
 ROWS = [
     ("identity", "YFA Investments"),
-    ("role", "builder + operator"),
-    ("focus", "AI systems + automation"),
+    ("role", "founder + operator"),
+    ("focus", "AI systems + compliance automation"),
     ("stack", "Python · JavaScript · React"),
-    ("shipping", "OmniSolve Pipeline"),
-    ("learning", "30 Days of Python"),
+    ("building", "LearnFi · PilotComply"),
+    ("clearance", "active Secret (US)"),
     ("signal", "practical tools > hype"),
 ]
 
