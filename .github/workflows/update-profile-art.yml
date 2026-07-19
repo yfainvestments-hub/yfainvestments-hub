@@ -24,11 +24,15 @@ jobs:
       - name: Install generator dependencies
         run: pip install -r scripts/requirements.txt
       - name: Refresh contribution data and artwork
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python scripts/fetch_contributions.py
           python scripts/render_heatmap_svg.py
+          python scripts/make_identity_svg.py
+          python scripts/make_info_card.py
       - name: Commit refreshed artwork
         uses: stefanzweifel/git-auto-commit-action@v7
         with:
-          commit_message: "chore: refresh contribution graph [skip ci]"
-          file_pattern: "data/contributions.json contrib-heatmap.svg"
+          commit_message: "chore: refresh profile artwork [skip ci]"
+          file_pattern: "data/contributions.json contrib-heatmap.svg identity-ascii.svg info-card.svg assets/avatar.png"
