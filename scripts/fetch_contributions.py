@@ -1,27 +1,45 @@
+"""Fetch the contribution calendar straight from GitHub's GraphQL API.
+
+This is the authoritative source GitHub uses to draw the profile graph, so the
+counts match exactly (and include private contributions when the querying token
+has access). It is far more robust than scraping the public HTML calendar.
+
+Requires a token in GITHUB_TOKEN (the nightly workflow passes the built-in
+Actions token; locally, export GITHUB_TOKEN=$(gh auth token))."""
 from __future__ import annotations
 
 import json
-import re
+import os
 from collections import defaultdict
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import requests
-from bs4 import BeautifulSoup
 
 
 USERNAME = "yfainvestments-hub"
-URL = f"https://github.com/users/{USERNAME}/contributions"
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "data" / "contributions.json"
-
-
-def contribution_count(soup: BeautifulSoup, cell) -> int:
-    tooltip = soup.find("tool-tip", attrs={"for": cell.get("id")})
-    if tooltip is None:
-        return 0
-    match = re.search(r"(\d[\d,]*) contributions?", tooltip.get_text(" ", strip=True))
-    return int(match.group(1).replace(",", "")) if match else 0
+API = "https://api.github.com/graphql"
+LEVELS = {
+    "NONE": 0,
+    "FIRST_QUARTILE": 1,
+    "SECOND_QUARTILE": 2,
+    "THIRD_QUARTILE": 3,
+    "FOURTH_QUARTILE": 4,
+}
+QUERY = """
+query($login: String!) {
+  user(login: $login) {
+    contributionsCollection {
+      contributionCalendar {
+        totalContributions
+        weeks { contributionDays { date contributionCount contributionLevel } }
+      }
+    }
+  }
+}
+"""
 
 
 def streaks(days: list[dict]) -> tuple[int, int]:
@@ -31,7 +49,7 @@ def streaks(days: list[dict]) -> tuple[int, int]:
         running = running + 1 if by_date[day] > 0 else 0
         longest = max(longest, running)
 
-    cursor = date.today()
+    cursor = max(by_date)
     if by_date.get(cursor, 0) == 0:
         cursor -= timedelta(days=1)
     current = 0
@@ -42,26 +60,35 @@ def streaks(days: list[dict]) -> tuple[int, int]:
 
 
 def main() -> None:
-    response = requests.get(
-        URL,
+    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    if not token:
+        raise SystemExit("GITHUB_TOKEN is required (export GITHUB_TOKEN=$(gh auth token))")
+
+    response = requests.post(
+        API,
+        json={"query": QUERY, "variables": {"login": USERNAME}},
         headers={
-            "Accept": "text/html",
-            "User-Agent": "yfainvestments-hub-profile/1.0",
+            "Authorization": f"Bearer {token}",
+            "User-Agent": f"{USERNAME}-profile/1.0",
         },
         timeout=30,
     )
     response.raise_for_status()
-    soup = BeautifulSoup(response.text, "html.parser")
+    body = response.json()
+    if body.get("errors"):
+        raise SystemExit(f"GraphQL errors: {body['errors']}")
 
+    calendar = body["data"]["user"]["contributionsCollection"]["contributionCalendar"]
     days = []
-    for cell in soup.select("td.ContributionCalendar-day[data-date]"):
-        days.append(
-            {
-                "date": cell["data-date"],
-                "count": contribution_count(soup, cell),
-                "level": int(cell.get("data-level", 0)),
-            }
-        )
+    for week in calendar["weeks"]:
+        for day in week["contributionDays"]:
+            days.append(
+                {
+                    "date": day["date"],
+                    "count": day["contributionCount"],
+                    "level": LEVELS.get(day["contributionLevel"], 0),
+                }
+            )
     days.sort(key=lambda item: item["date"])
     if len(days) < 350:
         raise RuntimeError(f"Expected a full contribution year, received {len(days)} days")
@@ -75,10 +102,10 @@ def main() -> None:
     payload = {
         "username": USERNAME,
         "generated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
-        "source": URL,
+        "source": "GitHub GraphQL contributionsCollection",
         "days": days,
         "stats": {
-            "total": sum(day["count"] for day in days),
+            "total": calendar["totalContributions"],
             "active_days": sum(day["count"] > 0 for day in days),
             "current_streak": current,
             "longest_streak": longest,
@@ -88,9 +115,8 @@ def main() -> None:
     }
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     OUTPUT.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-    print(f"Wrote {len(days)} days and {payload['stats']['total']} contributions to {OUTPUT}")
+    print(f"Wrote {len(days)} days, {payload['stats']['total']} contributions to {OUTPUT}")
 
 
 if __name__ == "__main__":
     main()
-
