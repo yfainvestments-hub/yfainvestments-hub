@@ -25,7 +25,12 @@ jobs:
         run: pip install -r scripts/requirements.txt
       - name: Refresh contribution data and artwork
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Optional PAT with read:user. When set, contributions come from the
+          # GraphQL API and include private repos regardless of the profile's
+          # "Include private contributions" setting. Without it the job scrapes
+          # the public profile page, which only shows private counts while that
+          # setting is enabled.
+          GH_CONTRIB_TOKEN: ${{ secrets.GH_CONTRIB_TOKEN }}
         run: |
           python scripts/fetch_contributions.py
           python scripts/render_heatmap_svg.py
