@@ -21,7 +21,7 @@
 
 <br><br>
 
-<a href="Learnfitech.com">LearnFi Technology</a>
+<a src="Learnfitech.com">LearnFi Technology</a>
 &nbsp;|&nbsp;
 <a href="omnisolvesystems.com">OmniSolve</a>
 &nbsp;|&nbsp;
