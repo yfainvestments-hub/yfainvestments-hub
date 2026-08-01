@@ -21,9 +21,9 @@
 
 <br><br>
 
-<a href="Learnfitech.com">LearnFi Technology</a>
+<a href="https://Learnfitech.com">LearnFi Technology</a>
 &nbsp;|&nbsp;
-<a href="omnisolvesystems.com">OmniSolve</a>
+<a href="https://omnisolvesystems.com">OmniSolve</a>
 &nbsp;|&nbsp;
 <a href="mailto:yfainvestments@gmail.com">Email</a>
 
