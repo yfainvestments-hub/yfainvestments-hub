@@ -21,9 +21,9 @@
 
 <br><br>
 
-<a href="https://github.com/yfainvestments-hub/omnisolve-pipeline">OmniSolve Pipeline</a>
+<a href="Learnfitech.com">LearnFi Technology</a>
 &nbsp;|&nbsp;
-<a href="https://omnisolve-pipeline.vercel.app">Live project</a>
+<a href="omnisolvesystems.com">OmniSolve</a>
 &nbsp;|&nbsp;
 <a href="mailto:yfainvestments@gmail.com">Email</a>
 
